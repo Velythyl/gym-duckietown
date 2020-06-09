@@ -75,6 +75,9 @@ class InteractiveImitationLearning:
             self._optimize()  # episodic learning
             self._on_episode_done()
 
+            if episode % 5 == 0:
+                self.learner.save(f"episode{episode}.pt")
+
     def _sampling(self):
         observation = self.environment.render_obs()
         for horizon in range(self._horizon):
