@@ -1,5 +1,8 @@
 import math
-from gym_duckietown.envs import DuckietownEnv  
+
+from gym.wrappers import FrameStack
+
+from gym_duckietown.envs import DuckietownEnv
 import argparse
 
 from .teacher import PurePursuitPolicy
@@ -10,13 +13,21 @@ from .utils import MemoryMapDataset
 import torch
 import os
 
-def launch_env(map_name, randomize_maps_on_reset=False, domain_rand=False):
+def launch_env(map_name, randomize_maps_on_reset=False, domain_rand=False, frame_stacking=1):
     environment = DuckietownEnv(
         domain_rand=domain_rand,
         max_steps=math.inf,
         map_name=map_name,
         randomize_maps_on_reset=False
     )
+
+    tmp = environment._get_tile
+
+    if frame_stacking != 1:
+        environment = FrameStack(environment, frame_stacking)
+        environment._get_tile = tmp
+        environment.reset() # Force reset to get fake frame buffer
+
     return environment
 
 def teacher(env, max_velocity):
@@ -39,15 +50,17 @@ def learning_rate_parse(arg):
 def decay_parse(arg):
     legacy_parse(arg, [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95])
 
+# Best: Horizon64_LR1e-05_Decay0.95_BS32_epochs10_2020-06-0817:13:35.067047
 def process_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--episode', '-i', default=90, type=int)
+    parser.add_argument('--episode', '-i', default=90000, type=int)
     parser.add_argument('--horizon', '-r', default=64, type=int)
     parser.add_argument('--learning-rate', '-l', default=1e-5, type=learning_rate_parse)
     parser.add_argument('--decay', '-d', default=0.5, type=decay_parse)    # mixing decay
     parser.add_argument('--save-path', '-s', default='iil_baseline', type=str)
     parser.add_argument('--map-name', '-m', default="loop_empty", type=str)
     parser.add_argument('--num-outputs', '-n', default=2, type=int)
+    parser.add_argument('--frame_stack', '-f', default=1, type=int) # TODO
     return parser
 
 if __name__ == '__main__':
@@ -63,7 +76,7 @@ if __name__ == '__main__':
     if not(os.path.isdir(config.save_path)):
         os.makedirs(config.save_path)
     # launching environment
-    environment = launch_env(config.map_name)
+    environment = launch_env(config.map_name, frame_stacking=config.frame_stack)
     
     task_horizon = config.horizon
     task_episode = config.episode
@@ -91,7 +104,7 @@ if __name__ == '__main__':
                         episodes=task_episode,
                         alpha = config.decay)
     
-    algorithm.train(debug=False)  #DEBUG to show simulation
+    algorithm.train(debug=True)  #DEBUG to show simulation
     print("Finished training. Closing the env now...")
     environment.close()
     print("Closed successfully.")
