@@ -51,14 +51,15 @@ class NeuralNetworkPolicy:
         self.model = model.to(self._device)
         self.optimizer = optimizer
         self.storage_location = storage_location
-        if self.storage_location != "":
-            self.writer = SummaryWriter(
-                self.storage_location + "/" + (
+        self.actual_storage = self.storage_location + "/" + (
                     graph_name + str(datetime.datetime.now()).replace(" ",
                                                                       "") if graph_name is not None else datetime.datetime.now().strftime(
                         "%Y%m%d-%H%M%S")
                 )
-            )
+
+        if self.storage_location != "":
+            self.writer = SummaryWriter(self.actual_storage)
+
 
         # Optional parameters
         self.epochs = kwargs.get('epochs', 10)
@@ -151,7 +152,11 @@ class NeuralNetworkPolicy:
         return prediction
 
     def save(self, filename="model.pt"):
-        torch.save(self.model.state_dict(), os.getcwd() + "/" + self.storage_location + "/" + filename)
+        try:
+            torch.save(self.model.state_dict(), os.getcwd() + "/" + self.actual_storage + "/" + filename)
+        except:
+            os.mkdir(os.getcwd() + "/" + self.actual_storage)
+            torch.save(self.model.state_dict(), os.getcwd() + "/" + self.actual_storage + "/" + filename)
 
     def _transform(self, observations, expert_actions):
         # Resize images
