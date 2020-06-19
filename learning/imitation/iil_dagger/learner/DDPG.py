@@ -29,26 +29,21 @@ class DDPG(object):
         self.critic_target = copy.copy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters())
 
+    def actor_act(self, state):
+        state_actor = torch.FloatTensor(np.expand_dims(state, axis=0)).to(device)
+        return self.actor(state_actor) + self.policy.predict(state)
+
     def predict(self, state):
         # just making sure the state has the correct format, otherwise the prediction doesn't work
         assert state.shape[0] == 3
-
-        if self.flat:
-            state = torch.FloatTensor(state.reshape(1, -1)).to(device)
-        else:
-            state = torch.FloatTensor(np.expand_dims(state, axis=0)).to(device)
-
-        state = state.detach()
-        action = self.actor(state).cpu().data.numpy().flatten()
-
-        return action
+        return self.actor_act(state).detach().cpu().numpy().flatten()
 
     def train(self, replay_buffer, iterations, batch_size=64, discount=0.99, tau=0.001):
 
         for it in range(iterations):
 
             # Sample replay buffer
-            sample = replay_buffer.sample(batch_size, flat=self.flat)
+            sample = replay_buffer.sample(batch_size, flat=False)
             state = torch.FloatTensor(sample["state"]).to(device)
             action = torch.FloatTensor(sample["action"]).to(device)
             next_state = torch.FloatTensor(sample["next_state"]).to(device)
@@ -71,7 +66,7 @@ class DDPG(object):
             self.critic_optimizer.step()
 
             # Compute actor loss
-            actor_loss = -self.critic(state, self.actor(state)).mean()
+            actor_loss = -self.critic(state, self.actor_act(state)).mean()
 
             # Optimize the actor
             self.actor_optimizer.zero_grad()

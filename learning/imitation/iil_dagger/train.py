@@ -7,8 +7,9 @@ import argparse
 
 from learning.imitation.iil_dagger.learner.DDPG import DDPG
 from learning.imitation.iil_dagger.learning.iil_train_loop import train_iil
+from learning.imitation.iil_dagger.learning.rpl_train_loop import train_rpl
 from .teacher import PurePursuitPolicy
-from .learner import NeuralNetworkPolicy
+from .iil_learner import NeuralNetworkPolicy
 from .model import Squeezenet
 from .algorithms import DAgger
 from .utils import MemoryMapDataset
@@ -54,7 +55,7 @@ def decay_parse(arg):
 # Best: Horizon64_LR1e-05_Decay0.95_BS32_epochs10_2020-06-0817:13:35.067047
 def process_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--episode', '-i', default=90, type=int)
+    parser.add_argument('--episode', '-i', default=5, type=int)
     parser.add_argument('--horizon', '-r', default=64, type=int)
     parser.add_argument('--learning-rate', '-l', default=1e-3, type=learning_rate_parse)
     parser.add_argument('--decay', '-d', default=0.7, type=decay_parse)    # mixing decay
@@ -86,12 +87,10 @@ if __name__ == '__main__':
 
     model = Squeezenet(num_outputs=config.num_outputs, max_velocity=max_velocity)
 
-    #ddpg = DDPG(model)
-
     policy_optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
     dataset = MemoryMapDataset(25000, (3, *input_shape), (2,), config.save_path)
-    learner = NeuralNetworkPolicy(
+    iil_learner = NeuralNetworkPolicy(
         model=model,
         optimizer=policy_optimizer,
         storage_location=config.save_path,
@@ -103,7 +102,7 @@ if __name__ == '__main__':
         dataset = dataset
     )
 
-    
+    """
     algorithm = DAgger(env=environment,
                         teacher=teacher(environment, max_velocity),
                         learner=learner,
@@ -112,9 +111,26 @@ if __name__ == '__main__':
                         alpha = config.decay,
                        )
     
-    algorithm.train(debug=True)  #DEBUG to show simulation
+    algorithm.train(debug=True)  #DEBUG to show simulation"""
 
-    #train_iil(environment, learner, task_horizon, task_episode, config.decay, max_velocity=0.7, _debug=False)
+    train_iil(environment, iil_learner, task_horizon, task_episode, config.decay, max_velocity=0.7, _debug=False)
+
+    """train_rpl(
+        environment,
+        learner,
+        1e4,
+        5e3,
+        1e6,
+        0.1,
+        32,
+        0.99,
+        0.005,
+        0.2,
+        0.5,
+        2,
+        500,
+        10000
+    )"""
 
     print("Finished training. Closing the env now...")
     environment.close()

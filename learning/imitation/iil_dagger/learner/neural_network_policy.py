@@ -12,6 +12,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from PIL import Image
 
+from learning.imitation.iil_dagger.utils.save_manager import SaveManager
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -52,11 +54,7 @@ class NeuralNetworkPolicy:
         self.model = model.to(self._device)
         self.optimizer = optimizer
         self.storage_location = storage_location
-        self.actual_storage = self.storage_location + "/" + (
-                    graph_name + str(datetime.datetime.now()).replace(" ",
-                                                                      "") if graph_name is not None else datetime.datetime.now().strftime(
-                        "%Y%m%d-%H%M%S")
-                )
+        self.actual_storage = SaveManager(self.storage_location, graph_name)
 
         if self.storage_location != "":
             self.writer = SummaryWriter(self.actual_storage)
@@ -156,10 +154,10 @@ class NeuralNetworkPolicy:
 
     def save(self, filename="model.pt"):
         try:
-            torch.save(self.model.state_dict(), os.getcwd() + "/" + self.actual_storage + "/" + filename)
+            torch.save(self.model.state_dict(), self.actual_storage.get_filepath(filename))
         except:
             os.mkdir(os.getcwd() + "/" + self.actual_storage)
-            torch.save(self.model.state_dict(), os.getcwd() + "/" + self.actual_storage + "/" + filename)
+            torch.save(self.model.state_dict(), self.actual_storage.get_filepath(filename))
 
     def _transform(self, observations, expert_actions):
         # Resize images

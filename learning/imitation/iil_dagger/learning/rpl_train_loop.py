@@ -34,9 +34,52 @@ def evaluate_policy(env, policy, eval_episodes=10, max_timesteps=500):
 
     return avg_reward
 
+class ReplayBuffer(object):
+    def __init__(self, max_size=1e6):
+        self.storage = []
+        self.max_size = max_size
 
-def train_iil(
+    # Expects tuples of (state, next_state, action, reward, done)
+    def add(self, state, next_state, action, reward, done):
+        if len(self.storage) < self.max_size:
+            self.storage.append((state, next_state, action, reward, done))
+        else:
+            # Remove random element in the memory beforea adding a new one
+            self.storage.pop(random.randrange(len(self.storage)))
+            self.storage.append((state, next_state, action, reward, done))
+
+
+    def sample(self, batch_size=100, flat=True):
+        ind = np.random.randint(0, len(self.storage), size=batch_size)
+        states, next_states, actions, rewards, dones = [], [], [], [], []
+
+        for i in ind:
+            state, next_state, action, reward, done = self.storage[i]
+
+            if flat:
+                states.append(np.array(state, copy=False).flatten())
+                next_states.append(np.array(next_state, copy=False).flatten())
+            else:
+                states.append(np.array(state, copy=False))
+                next_states.append(np.array(next_state, copy=False))
+            actions.append(np.array(action, copy=False))
+            rewards.append(np.array(reward, copy=False))
+            dones.append(np.array(done, copy=False))
+
+        # state_sample, action_sample, next_state_sample, reward_sample, done_sample
+        return {
+            "state": np.stack(states),
+            "next_state": np.stack(next_states),
+            "action": np.stack(actions),
+            "reward": np.stack(rewards).reshape(-1,1),
+            "done": np.stack(dones).reshape(-1,1)
+        }
+
+
+def train_rpl(
         env,
+        iil_policy,
+        ddpg,
         start_timesteps,
         eval_freq,
         max_timesteps,
@@ -82,7 +125,6 @@ def train_iil(
     max_action = float(env.action_space.high[0])
 
     # Initialize policy FIXME
-    policy = DDPG(state_dim, action_dim, max_action, net_type="cnn")
 
     replay_buffer = ReplayBuffer(replay_buffer_max_size)
 
