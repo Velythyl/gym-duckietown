@@ -5,6 +5,8 @@ from gym.wrappers import FrameStack
 from gym_duckietown.envs import DuckietownEnv
 import argparse
 
+from learning.imitation.iil_dagger.learner.DDPG import DDPG
+from learning.imitation.iil_dagger.learning.iil_train_loop import train_iil
 from .teacher import PurePursuitPolicy
 from .learner import NeuralNetworkPolicy
 from .model import Squeezenet
@@ -18,7 +20,7 @@ def launch_env(map_name, randomize_maps_on_reset=False, domain_rand=False, frame
         domain_rand=domain_rand,
         max_steps=math.inf,
         map_name=map_name,
-        randomize_maps_on_reset=False
+        randomize_maps_on_reset=randomize_maps_on_reset
     )
 
     tmp = environment._get_tile
@@ -41,7 +43,6 @@ def legacy_parse(arg, arr):
     if "." in arg or "e" in arg:
         return float(arg)
     else:
-        x = arr[int(arg)]
         return arr[int(arg)]
 
 def learning_rate_parse(arg):
@@ -53,14 +54,16 @@ def decay_parse(arg):
 # Best: Horizon64_LR1e-05_Decay0.95_BS32_epochs10_2020-06-0817:13:35.067047
 def process_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--episode', '-i', default=90000, type=int)
+    parser.add_argument('--episode', '-i', default=90, type=int)
     parser.add_argument('--horizon', '-r', default=64, type=int)
-    parser.add_argument('--learning-rate', '-l', default=1e-5, type=learning_rate_parse)
-    parser.add_argument('--decay', '-d', default=0.5, type=decay_parse)    # mixing decay
+    parser.add_argument('--learning-rate', '-l', default=1e-3, type=learning_rate_parse)
+    parser.add_argument('--decay', '-d', default=0.7, type=decay_parse)    # mixing decay
     parser.add_argument('--save-path', '-s', default='iil_baseline', type=str)
     parser.add_argument('--map-name', '-m', default="loop_empty", type=str)
     parser.add_argument('--num-outputs', '-n', default=2, type=int)
-    parser.add_argument('--frame_stack', '-f', default=1, type=int) # TODO
+
+    parser.add_argument('--frame-stack', '-f', default=1, type=int) # TODO
+    parser.add_argument('--static-mixing', default=False, type=bool)  # TODO
     return parser
 
 if __name__ == '__main__':
@@ -76,12 +79,15 @@ if __name__ == '__main__':
     if not(os.path.isdir(config.save_path)):
         os.makedirs(config.save_path)
     # launching environment
-    environment = launch_env(config.map_name, frame_stacking=config.frame_stack)
+    environment = launch_env(config.map_name, randomize_maps_on_reset=True, frame_stacking=config.frame_stack)
     
     task_horizon = config.horizon
     task_episode = config.episode
 
     model = Squeezenet(num_outputs=config.num_outputs, max_velocity=max_velocity)
+
+    #ddpg = DDPG(model)
+
     policy_optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
     dataset = MemoryMapDataset(25000, (3, *input_shape), (2,), config.save_path)
@@ -89,7 +95,7 @@ if __name__ == '__main__':
         model=model,
         optimizer=policy_optimizer,
         storage_location=config.save_path,
-        graph_name=f"Horizon{config.horizon}_LR{config.learning_rate}_Decay{config.decay}_BS{batch_size}_epochs{epochs}_",
+        graph_name=f"Horizon{config.horizon}_LR{config.learning_rate}_Decay{config.decay}_BS{batch_size}_epochs{epochs}_static-mixing{config.static_mixing}_",
         batch_size=batch_size,
         epochs=epochs,
         input_shape=input_shape,
@@ -97,14 +103,19 @@ if __name__ == '__main__':
         dataset = dataset
     )
 
+    
     algorithm = DAgger(env=environment,
                         teacher=teacher(environment, max_velocity),
                         learner=learner,
                         horizon = task_horizon,
                         episodes=task_episode,
-                        alpha = config.decay)
+                        alpha = config.decay,
+                       )
     
     algorithm.train(debug=True)  #DEBUG to show simulation
+
+    #train_iil(environment, learner, task_horizon, task_episode, config.decay, max_velocity=0.7, _debug=False)
+
     print("Finished training. Closing the env now...")
     environment.close()
     print("Closed successfully.")

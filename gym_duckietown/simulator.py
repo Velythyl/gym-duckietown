@@ -302,7 +302,10 @@ class Simulator(gym.Env):
 
         if self.randomize_maps_on_reset:
             import os
-            self.map_names = os.listdir('maps')
+            try:
+                self.map_names = os.listdir('maps')
+            except:
+                self.map_names = os.listdir('gym_duckietown/maps')
             self.map_names = [mapfile.replace('.yaml', '') for mapfile in self.map_names]
 
         # Initialize the state

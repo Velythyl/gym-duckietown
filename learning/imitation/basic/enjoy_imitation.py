@@ -29,7 +29,7 @@ def _enjoy():
 
     try:
         state_dict = torch.load('trained_models/imitate.pt', map_location=device)
-        model.load_state_dict(state_dict)
+        model.load_state_dict()
     except:
         print('failed to load model')
         exit()

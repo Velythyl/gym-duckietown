@@ -31,7 +31,7 @@ class NeuralNetworkPolicy:
         save a model checkpoint to storage location
     """
 
-    def __init__(self, model, optimizer, storage_location, dataset, graph_name=None, **kwargs):
+    def __init__(self, model, optimizer, storage_location, dataset, gain=10, graph_name=None, **kwargs):
         """
         Parameters
         ----------
@@ -46,6 +46,7 @@ class NeuralNetworkPolicy:
         """
         self._train_iteration = 0
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.gain = gain
 
         # Base parameters
         self.model = model.to(self._device)
@@ -148,6 +149,8 @@ class NeuralNetworkPolicy:
         # Predict with model
         prediction = self.model.predict(observation.to(self._device))
         prediction = prediction.detach().cpu().numpy()
+
+        prediction[1] *= self.gain
 
         return prediction
 

@@ -1,3 +1,6 @@
+import copy
+
+from learning.imitation.iil_dagger.teacher import PurePursuitPolicy
 from .train import launch_env, teacher
 from .learner import NeuralNetworkPolicy
 from .model import Squeezenet
@@ -20,7 +23,7 @@ def process_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--continuous', '-c', default=True, type=str2bool)
 
-    parser.add_argument('--episode', '-i', default=10, type=int)
+    parser.add_argument('--episode', '-i', default=256, type=int)
     parser.add_argument('--horizon', '-r', default=64, type=int)
     parser.add_argument('--num-outputs', '-n', default=2, type=int)
     parser.add_argument('--save-path', '-s', default='iil_baseline', type=str)
@@ -36,7 +39,7 @@ if __name__ == '__main__':
     config = parser.parse_args()
     # launching environment and testing on different maps using map randomization
     environment = launch_env(config.map_name, randomize_maps_on_reset=True)
-    
+
     task_horizon = config.horizon
     task_episode = config.episode
 
@@ -55,17 +58,25 @@ if __name__ == '__main__':
         model_path = config.model_path
     )
 
+    #policy = PurePursuitPolicy(environment, max_velocity)
+
     with torch.no_grad():
         while True:
             obs = environment.reset()
             environment.render()
             rewards = []
+
+            nb_of_steps = 0
+
             while True:
-                action = policy.predict(np.array(obs))
+                action = list(policy.predict(np.array(obs)))
                 obs, rew, done, misc = environment.step(action)
                 rewards.append(rew)
                 environment.render()
-                if done:
+
+                nb_of_steps += 1
+
+                if done or nb_of_steps > config.episode:
                     break
             print("mean episode reward:", np.mean(rewards))
 
