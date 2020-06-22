@@ -11,6 +11,7 @@ import torch
 import gym
 import os
 
+from learning.imitation.iil_dagger.utils.transform import transform
 
 """
     parser.add_argument("--log_file", default=None, type=str)  # Maximum number of steps to keep in the replay buffer
@@ -18,7 +19,7 @@ import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def evaluate_policy(env, policy, eval_episodes=10, max_timesteps=500):
+def evaluate_policy(env, policy, eval_episodes=10, max_timesteps=250):
     avg_reward = 0.
     for _ in range(eval_episodes):
         obs = env.reset()
@@ -35,33 +36,51 @@ def evaluate_policy(env, policy, eval_episodes=10, max_timesteps=500):
     return avg_reward
 
 class ReplayBuffer(object):
-    def __init__(self, max_size=1e6):
-        self.storage = []
+    def __init__(self, max_size=1e6, shape=(120, 160)):
+        self.states = torch.empty(size=(max_size, 3, shape[0], shape[1]))
+        self.next_states = torch.empty(size=(max_size, 3, shape[0], shape[1]))
+        self.actions = torch.empty(size=(max_size, 2))
+        self.rewards = torch.empty(size=(max_size, 1))
+        self.dones = torch.empty(size=(max_size, 1))
+
+        self._count = 0
         self.max_size = max_size
 
     # Expects tuples of (state, next_state, action, reward, done)
     def add(self, state, next_state, action, reward, done):
-        if len(self.storage) < self.max_size:
-            self.storage.append((state, next_state, action, reward, done))
+        if self._count < self.max_size:
+            index = self._count
+
+            self._count += 1
         else:
-            # Remove random element in the memory beforea adding a new one
-            self.storage.pop(random.randrange(len(self.storage)))
-            self.storage.append((state, next_state, action, reward, done))
+            # Remove random element in the memory before adding a new one
+            index = random.randrange(self.max_size)
+
+        self.states[index] = transform([state], as_tensor=True, on_device=False, only_obs=True)[0]
+        self.next_states[index] = transform([next_state], as_tensor=True, on_device=False, only_obs=True)[0]
+        self.actions[index] = torch.from_numpy(action)
+        self.rewards[index] = reward
+        self.dones[index] = done
 
 
-    def sample(self, batch_size=100, flat=True):
-        ind = np.random.randint(0, len(self.storage), size=batch_size)
+    def sample(self, batch_size=100):
+        ind = np.random.randint(0, self._count, size=batch_size)
+
+        state = self.states[ind]
+        next_state = self.next_states[ind]
+        action = self.actions[ind]
+        reward = self.rewards[ind]
+        done = self.dones[ind]
+
+        return state.to(device), next_state.to(device), action.to(device), reward.to(device), done.to(device)
+
         states, next_states, actions, rewards, dones = [], [], [], [], []
 
         for i in ind:
             state, next_state, action, reward, done = self.storage[i]
 
-            if flat:
-                states.append(np.array(state, copy=False).flatten())
-                next_states.append(np.array(next_state, copy=False).flatten())
-            else:
-                states.append(np.array(state, copy=False))
-                next_states.append(np.array(next_state, copy=False))
+            states.append(np.array(state, copy=False))
+            next_states.append(np.array(next_state, copy=False))
             actions.append(np.array(action, copy=False))
             rewards.append(np.array(reward, copy=False))
             dones.append(np.array(done, copy=False))
@@ -78,8 +97,7 @@ class ReplayBuffer(object):
 
 def train_rpl(
         env,
-        iil_policy,
-        ddpg,
+        rpl_policy,
         start_timesteps,
         eval_freq,
         max_timesteps,
@@ -124,12 +142,10 @@ def train_rpl(
     action_dim = env.action_space.shape[0]
     max_action = float(env.action_space.high[0])
 
-    # Initialize policy FIXME
-
     replay_buffer = ReplayBuffer(replay_buffer_max_size)
 
     # Evaluate untrained policy
-    evaluations = [evaluate_policy(env, policy)]
+    evaluations = [evaluate_policy(env, rpl_policy)]
 
     total_timesteps = 0
     timesteps_since_eval = 0
@@ -143,18 +159,17 @@ def train_rpl(
         if done:
 
             if total_timesteps != 0:
-                print("Replay buffer length is ", len(replay_buffer.storage))  # TODO rm
                 print(("Total T: %d Episode Num: %d Episode T: %d Reward: %f") % (
                     total_timesteps, episode_num, episode_timesteps, episode_reward))
-                policy.train(replay_buffer, episode_timesteps, batch_size, discount, tau)
+                rpl_policy.train(replay_buffer, episode_timesteps, batch_size, discount, tau)
 
             # Evaluate episode
             if timesteps_since_eval >= eval_freq:
                 timesteps_since_eval %= eval_freq
-                evaluations.append(evaluate_policy(env, policy))
-
-                policy.save(file_name, directory="./pytorch_models")    # FIXME
-                np.savez("./results/{}.npz".format(file_name), evaluations)
+                evaluations.append(evaluate_policy(env, rpl_policy))
+                rpl_policy.save("model")
+                print("Saving model")
+                #np.savez(rpl_policy.), evaluations)
 
             # Reset environment
             env_counter += 1
@@ -168,7 +183,7 @@ def train_rpl(
         if total_timesteps < start_timesteps:
             action = env.action_space.sample()
         else:
-            action = policy.predict(np.array(obs))
+            action = rpl_policy.predict(np.array(obs))
             if expl_noise != 0:
                 action = (action + np.random.normal(
                     0,
@@ -198,7 +213,8 @@ def train_rpl(
         timesteps_since_eval += 1
 
     # Final evaluation
-    evaluations.append(evaluate_policy(env, policy))
+    evaluations.append(evaluate_policy(env, rpl_policy))
 
-    policy.save(file_name, directory="./pytorch_models")    # FIXME
-    np.savez("./results/{}.npz".format(file_name), evaluations)
+    rpl_policy.save("model")
+    print("Saving model")
+    #np.savez("./results/{}.npz".format(file_name), evaluations)

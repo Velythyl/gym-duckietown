@@ -130,22 +130,39 @@ class NeuralNetworkPolicy:
         # Post training routine
         self._on_optimization_end()
 
-    def predict(self, observation):
+    def mass_predict(self, observations):
         """
         Parameters
         ----------
-        observations : 
+        observations :
+            input images; already transformed
+        Returns
+        -------
+        predictions
+        """
+        pred = self.model(observations)
+        pred[:,1] *= self.gain
+        return pred
+
+    def predict(self, observation, already_transformed=False):
+        """
+        Parameters
+        ----------
+        already_transformed :
+            is the image already a tensor on the device
+        observations :
             input image from the simulator
         Returns
         ----------
         prediction:
             action space of input observation
         """
-        # Apply transformations to data
-        observation, _ = self._transform([observation], [0])
-        observation = torch.tensor(observation)
+        if not already_transformed:
+            # Apply transformations to data
+            observation, _ = self._transform([observation], [0])
+            observation = torch.tensor(observation).to(self._device)
         # Predict with model
-        prediction = self.model.predict(observation.to(self._device))
+        prediction = self.model.predict(observation)
         prediction = prediction.detach().cpu().numpy()
 
         prediction[1] *= self.gain
@@ -156,7 +173,7 @@ class NeuralNetworkPolicy:
         try:
             torch.save(self.model.state_dict(), self.actual_storage.get_filepath(filename))
         except:
-            os.mkdir(os.getcwd() + "/" + self.actual_storage)
+            os.mkdir(os.getcwd() + "/" + str(self.actual_storage))
             torch.save(self.model.state_dict(), self.actual_storage.get_filepath(filename))
 
     def _transform(self, observations, expert_actions):

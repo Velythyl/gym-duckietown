@@ -1,5 +1,6 @@
 import copy
 
+from learning.imitation.iil_dagger.learner.DDPG import DDPG
 from learning.imitation.iil_dagger.teacher import PurePursuitPolicy
 from .train import launch_env, teacher
 from .learner import NeuralNetworkPolicy
@@ -57,6 +58,15 @@ if __name__ == '__main__':
         max_velocity = max_velocity,
         model_path = config.model_path
     )
+
+    try:
+        rpl = DDPG(policy, None)
+        rpl.load("/".join(config.model_path.split("/")[:-1])+"/RPL/") # TODO make this prettier
+        policy = rpl
+    except Exception as e:
+        print(e)
+        print("Could not load RPL: is it missing? Assuming this is intended; continuing with Dagger")
+        pass
 
     #policy = PurePursuitPolicy(environment, max_velocity)
 
