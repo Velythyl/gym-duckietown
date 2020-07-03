@@ -12,6 +12,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from PIL import Image
 
+from learning.imitation.iil_dagger.model import Squeezenet
+from learning.imitation.iil_dagger.utils import MemoryMapDataset
 from learning.imitation.iil_dagger.utils.save_manager import SaveManager
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,7 +35,7 @@ class NeuralNetworkPolicy:
         save a model checkpoint to storage location
     """
 
-    def __init__(self, model, optimizer, storage_location, dataset, gain=10, graph_name=None, **kwargs):
+    def __init__(self, max_velocity, input_shape, save_path, save_manager=None, gain=10, learning_rate=1e-3, **kwargs):
         """
         Parameters
         ----------
@@ -50,25 +52,23 @@ class NeuralNetworkPolicy:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gain = gain
 
-        # Base parameters
-        self.model = model.to(self._device)
-        self.optimizer = optimizer
-        self.storage_location = storage_location
-        self.actual_storage = SaveManager(self.storage_location, graph_name)
-
-        if self.storage_location != "":
-            self.writer = SummaryWriter(self.actual_storage)
-
-
-        # Optional parameters
+        # Optional parameters TODO remove this
         self.epochs = kwargs.get('epochs', 10)
         self.batch_size = kwargs.get('batch_size', 32)
         self.input_shape = kwargs.get('input_shape', (60, 80))
         self.max_velocity = kwargs.get('max_velocity', 0.7)
 
+        # Base parameters
+        self.model = Squeezenet(num_outputs=2, max_velocity=max_velocity).to(self._device)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.save_manager = save_manager
+
+        if self.save_manager is not None:
+            self.writer = SummaryWriter(str(self.save_manager))
+
         self.episode = 0
 
-        self.dataset = dataset
+        self.dataset = MemoryMapDataset(25000, (3, *input_shape), (2,), save_path)
         # Load previous weights
         if 'model_path' in kwargs:
             self.model.load_state_dict(torch.load(kwargs.get('model_path'), map_location=self._device))
@@ -130,7 +130,7 @@ class NeuralNetworkPolicy:
         # Post training routine
         self._on_optimization_end()
 
-    def mass_predict(self, observations):
+    def mass_predict(self, observations):   # FIXME with torch no grad
         """
         Parameters
         ----------
@@ -141,8 +141,7 @@ class NeuralNetworkPolicy:
         predictions
         """
         pred = self.model(observations)
-        pred[:,1] *= self.gain
-        return pred
+        return pred.detach()
 
     def predict(self, observation, already_transformed=False):
         """
@@ -165,16 +164,14 @@ class NeuralNetworkPolicy:
         prediction = self.model.predict(observation)
         prediction = prediction.detach().cpu().numpy()
 
-        prediction[1] *= self.gain
-
         return prediction
 
     def save(self, filename="model.pt"):
         try:
-            torch.save(self.model.state_dict(), self.actual_storage.get_filepath(filename))
+            torch.save(self.model.state_dict(), self.save_manager.get_filepath(filename))
         except:
-            os.mkdir(os.getcwd() + "/" + str(self.actual_storage))
-            torch.save(self.model.state_dict(), self.actual_storage.get_filepath(filename))
+            os.mkdir(os.getcwd() + "/" + str(self.save_manager))
+            torch.save(self.model.state_dict(), self.save_manager.get_filepath(filename))
 
     def _transform(self, observations, expert_actions):
         # Resize images

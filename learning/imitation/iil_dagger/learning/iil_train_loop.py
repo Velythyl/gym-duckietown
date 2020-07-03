@@ -12,7 +12,7 @@ def train_iil(environment, learner, horizon, episodes, alpha, max_velocity=0.7, 
     _observations = []
     _expert_actions = []
 
-    teacher = PurePursuitPolicy(env=environment, ref_velocity=max_velocity)
+    teacher = PurePursuitPolicy(env=environment, ref_velocity=max_velocity, rescale_vel=[-1,max_velocity])
 
     # internal count
     _current_horizon = 0
@@ -88,17 +88,22 @@ def train_iil(environment, learner, horizon, episodes, alpha, max_velocity=0.7, 
     for _episode in range(_episodes):
         active_policy = True
         _found_obstacle = False
+        done = False
 
         # sampling
         observation = environment.render_obs()
         for _current_horizon in range(_horizon):
             action, active_policy, _found_obstacle = _act(observation, active_policy, _found_obstacle)
+
             try:
-                next_observation, reward, done, info = environment.step(action)
+                result = environment.step(action)
+                next_observation, reward, done, info = result
             except Exception as e:
                 print(e)
             if _debug:
                 environment.render()
+            if done:
+                environment.reset()
             observation = next_observation
 
         # optimize

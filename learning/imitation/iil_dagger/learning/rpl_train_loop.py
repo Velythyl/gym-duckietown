@@ -105,9 +105,6 @@ def train_rpl(
         batch_size,
         discount,
         tau,
-        policy_noise,
-        noise_clip,
-        policy_freq,
         env_timesteps,
         replay_buffer_max_size
     ):
@@ -125,22 +122,7 @@ def train_rpl(
         os.dup2(tee.stdin.fileno(), sys.stderr.fileno())
     """
 
-    #file_name = "{}_{}".format(
-    #    policy_name,
-    #    str(args.seed),
-    #)
-    # TODO
-
-    #if not os.path.exists("./results"):
-    #    os.makedirs("./results")
-    #if args.save_models and not os.path.exists("./pytorch_models"):
-    #    os.makedirs("./pytorch_models")
-
     env.reset()
-
-    state_dim = env.observation_space.shape
-    action_dim = env.action_space.shape[0]
-    max_action = float(env.action_space.high[0])
 
     replay_buffer = ReplayBuffer(replay_buffer_max_size)
 
@@ -161,13 +143,13 @@ def train_rpl(
             if total_timesteps != 0:
                 print(("Total T: %d Episode Num: %d Episode T: %d Reward: %f") % (
                     total_timesteps, episode_num, episode_timesteps, episode_reward))
-                rpl_policy.train(replay_buffer, episode_timesteps, batch_size, discount, tau)
+                rpl_policy.train(replay_buffer, episode_timesteps, batch_size, discount, tau, warming_up=total_timesteps < start_timesteps)
 
             # Evaluate episode
             if timesteps_since_eval >= eval_freq:
                 timesteps_since_eval %= eval_freq
                 evaluations.append(evaluate_policy(env, rpl_policy))
-                rpl_policy.save("model")
+                rpl_policy.save()
                 print("Saving model")
                 #np.savez(rpl_policy.), evaluations)
 
@@ -215,6 +197,5 @@ def train_rpl(
     # Final evaluation
     evaluations.append(evaluate_policy(env, rpl_policy))
 
-    rpl_policy.save("model")
+    rpl_policy.save()
     print("Saving model")
-    #np.savez("./results/{}.npz".format(file_name), evaluations)

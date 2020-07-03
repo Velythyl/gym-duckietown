@@ -56,6 +56,8 @@ class Squeezenet(nn.Module):
         self.model.num_classes = self.num_outputs
         self._init_weights()
 
+        self.activation = torch.nn.Tanh()#(torch.nn.Sigmoid(), torch.nn.Tanh())
+
         self.is_critic = is_critic
 
     def __copy__(self):
@@ -85,6 +87,10 @@ class Squeezenet(nn.Module):
             normalized predicted action from the model
         """
         action = self.model(images)
+
+        action = self.activation(action)
+        action = action.squeeze()
+
         return action
 
     def loss(self, *args):
@@ -121,17 +127,8 @@ class Squeezenet(nn.Module):
             action having velocity and omega of shape (batch_size, 2)
         """
         images = args[0]
-        output = self.model(images)
-        if self.is_critic:  # Used for RPL
-            return output.detach().cpu()
+        output = self(images).detach()
 
-        if self.num_outputs==1:
-            omega = output
-            v_tensor = self.max_velocity_tensor.clone()
-        else:
-            v_tensor = output[:,0].unsqueeze(1)
-            omega = output[:,1].unsqueeze(1) * self.max_steering
-        output = torch.cat((v_tensor, omega), 1).squeeze().detach()
         return output
 
 if __name__ == '__main__':

@@ -5,7 +5,6 @@ from learning.imitation.iil_dagger.teacher import PurePursuitPolicy
 from .train import launch_env, teacher
 from .learner import NeuralNetworkPolicy
 from .model import Squeezenet
-from .algorithms import DAgger
 import argparse
 import os
 import numpy as np
@@ -25,11 +24,12 @@ def process_args():
     parser.add_argument('--continuous', '-c', default=True, type=str2bool)
 
     parser.add_argument('--episode', '-i', default=256, type=int)
-    parser.add_argument('--horizon', '-r', default=64, type=int)
-    parser.add_argument('--num-outputs', '-n', default=2, type=int)
     parser.add_argument('--save-path', '-s', default='iil_baseline', type=str)
     parser.add_argument('--model-path', '-mp', default="iil_baseline", type=str)
+    parser.add_argument('--model-name', default="model.pt", type=str)
     parser.add_argument('--map-name', '-m', default="loop_empty", type=str)
+
+    parser.add_argument('--RPL_path', default="RPL", type=str)
     return parser
 
 if __name__ == '__main__':
@@ -39,15 +39,11 @@ if __name__ == '__main__':
 
     config = parser.parse_args()
     # launching environment and testing on different maps using map randomization
-    environment = launch_env(config.map_name, randomize_maps_on_reset=True)
+    environment = launch_env(config.map_name, randomize_maps_on_reset=False)
 
-    task_horizon = config.horizon
     task_episode = config.episode
 
-    if not(os.path.isfile(config.model_path)):
-        raise Exception('Model File not found')
-
-    model = Squeezenet(num_outputs=config.num_outputs, max_velocity=max_velocity)
+    model = Squeezenet(num_outputs=2, max_velocity=max_velocity)
 
     policy = NeuralNetworkPolicy(
         model=model,
@@ -56,19 +52,20 @@ if __name__ == '__main__':
         storage_location="",
         input_shape=input_shape,
         max_velocity = max_velocity,
-        model_path = config.model_path
+        model_path = config.model_path+"/"+config.model_name
     )
 
-    try:
-        rpl = DDPG(policy, None)
-        rpl.load("/".join(config.model_path.split("/")[:-1])+"/RPL/") # TODO make this prettier
-        policy = rpl
-    except Exception as e:
-        print(e)
-        print("Could not load RPL: is it missing? Assuming this is intended; continuing with Dagger")
-        pass
+    if False:
+        try:
+            rpl = DDPG(policy, None, None)
+            rpl.load(config.model_path+"/"+config.RPL_path+"/") # TODO make this prettier
+            policy = rpl
+        except Exception as e:
+            print(e)
+            print("Could not load RPL: is it missing? Assuming this is intended; continuing with Dagger")
+            pass
 
-    #policy = PurePursuitPolicy(environment, max_velocity)
+    GAIN = 10
 
     with torch.no_grad():
         while True:
@@ -80,6 +77,7 @@ if __name__ == '__main__':
 
             while True:
                 action = list(policy.predict(np.array(obs)))
+
                 obs, rew, done, misc = environment.step(action)
                 rewards.append(rew)
                 environment.render()
