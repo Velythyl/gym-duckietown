@@ -1,64 +1,34 @@
-import math
-import os
 import random
 
 import numpy as np
+import torch
+from pytorch_lightning.callbacks import EarlyStopping
+from torch.utils.data import DataLoader
 
-from gym_duckietown.envs import DuckietownEnv
-import math
-import numpy as np
-import math
-import numpy as np
-from gym_duckietown.simulator import AGENT_SAFETY_RAD
-from learning.reward_learning.agents.good_ppc import PurePursuitPolicy
+from learning.reward_learning.dataset.dataset import TrainSet, ValSet
+from learning.reward_learning.model.model import CIFARNet
 
+import pytorch_lightning as pl
 
 def seed(seed):
-    #torch.manual_seed(seed)
+    torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
 seed(random.randint(0, 9999999))
 
-def to_image(np_array):
-    from PIL import Image
-    img = Image.fromarray(np_array, 'RGB')
-    img.show()
-    i = 0
+train_loader = DataLoader(TrainSet(), batch_size=128,
+                        shuffle=True, num_workers=1)
+val_loader = DataLoader(ValSet(), batch_size=32, shuffle=False, num_workers=1)
 
-os.chdir("../..")
-
-environment = DuckietownEnv(
-        domain_rand=False,
-        max_steps=math.inf,
-        randomize_maps_on_reset=False,
-        map_name="loop_obstacles"
-    )
-
-policy = PurePursuitPolicy(environment)
-
-MAX_STEPS = 500
-
-while True:
-    obs = environment.reset()
-    environment.render(segment=True)
-    rewards = []
-
-    nb_of_steps = 0
-
-    while True:
-        action = list(policy.predict(np.array(obs)))
-        action[1]*=7
-
-        obs, rew, done, misc = environment.step(action)
-        rewards.append(rew)
-        environment.render(segment=int(nb_of_steps / 50) % 2 == 0)
-
-        #to_image(obs)
-
-        nb_of_steps += 1
-
-        if done or nb_of_steps > MAX_STEPS:
-            break
-    print("mean episode reward:", np.mean(rewards))
-
-environment.close()
+model = CIFARNet()
+trainer = pl.Trainer(
+    gpus=1,
+    early_stop_callback=EarlyStopping(
+                monitor='val_loss',
+                patience=6,
+                strict=True,
+                verbose=True,
+                mode='min'
+            )
+)
+trainer.fit(model, train_loader, val_loader)

@@ -36,8 +36,8 @@ from .objmesh import *
 from .randomization import Randomizer
 
 # Rendering window size
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH = 640
+WINDOW_HEIGHT = 480
 
 # Camera image size
 DEFAULT_CAMERA_WIDTH = 640
@@ -1364,6 +1364,8 @@ class Simulator(gym.Env):
         return [gx, gy, gz], angle
 
     def compute_reward(self, pos, angle, speed):
+        speed = 1 # TODO RM REWARD LEARNING NEEDS NO SPEED FACTOR!
+
         # Compute the collision avoidance penalty
         col_penalty = self.proximity_penalty2(pos, angle)
 
@@ -1382,7 +1384,7 @@ class Simulator(gym.Env):
             )
         return reward
 
-    def step(self, action: np.ndarray):
+    def step(self, action: np.ndarray, top_down=False, segmented=False):
         action = np.clip(action, -1, 1)
         # Actions could be a Python list
         action = np.array(action)
@@ -1390,7 +1392,7 @@ class Simulator(gym.Env):
             self.update_physics(action)
 
         # Generate the current camera image
-        obs = self.render_obs()
+        obs = self.render_obs(top_down, segmented)
         misc = self.get_agent_info()
 
         d = self._compute_done_reward()
@@ -1454,7 +1456,7 @@ class Simulator(gym.Env):
 
         # Clear the color and depth buffers
 
-        c0, c1, c2 = self.horizon_color if not segment else [255,0,255]
+        c0, c1, c2 = self.horizon_color if not segment else [0,0,0]
         gl.glClearColor(c0, c1, c2, 1.0)
         gl.glClearDepth(1.0)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
@@ -1493,10 +1495,20 @@ class Simulator(gym.Env):
             gl.glTranslatef(0, 0, CAMERA_FORWARD_DIST)
 
         if top_down:
+
+            # Fit map to viewport
+            grid_height_px = self.grid_height * self.road_tile_size
+            grid_width_px = self.grid_width * self.road_tile_size
+            if grid_height_px >= grid_width_px:
+                y = abs((grid_height_px / 2) / math.tan(math.radians(self.cam_fov_y / 2)))
+            else:
+                y = abs((grid_width_px / 2) / math.tan(
+                    2 * math.atan(math.tan(math.radians(self.cam_fov_y) * 0.5) * width / height) / 2))
+
             gl.gluLookAt(
                     # Eye position
                     (self.grid_width * self.road_tile_size) / 2,
-                    5,
+                    y,
                     (self.grid_height * self.road_tile_size) / 2,
                     # Target
                     (self.grid_width * self.road_tile_size) / 2,
@@ -1522,7 +1534,7 @@ class Simulator(gym.Env):
         # Draw the ground quad
         gl.glDisable(gl.GL_TEXTURE_2D)
         # background is magenta when segmenting for easy isolation of main map image
-        gl.glColor3f(*self.ground_color if not segment else [255,0,255])
+        gl.glColor3f(*self.ground_color if not segment else [0,0,0])
         gl.glPushMatrix()
         gl.glScalef(50, 1, 50)
         self.ground_vlist.draw(gl.GL_QUADS)
@@ -1641,7 +1653,7 @@ class Simulator(gym.Env):
 
         return img_array
 
-    def render_obs(self, segment=False):
+    def render_obs(self, top_down=False, segment=False):
         """
         Render an observation from the point of view of the agent
         """
@@ -1652,7 +1664,7 @@ class Simulator(gym.Env):
                 self.multi_fbo,
                 self.final_fbo,
                 self.img_array,
-                top_down=False,
+                top_down=top_down,
                 segment=segment
         )
 

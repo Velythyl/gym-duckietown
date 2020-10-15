@@ -45,7 +45,7 @@ class DuckietownEnv(Simulator):
         # Wheel velocity limit
         self.limit = limit
 
-    def step(self, action):
+    def step(self, action, top_down=False, segmented=False):
         vel, angle = action
 
         # Distance between the wheels
@@ -72,7 +72,7 @@ class DuckietownEnv(Simulator):
 
         vels = np.array([u_l_limited, u_r_limited])
 
-        obs, reward, done, info = Simulator.step(self, vels)
+        obs, reward, done, info = Simulator.step(self, vels, top_down, segmented)
         mine = {}
         mine['k'] = self.k
         mine['gain'] = self.gain
