@@ -218,6 +218,9 @@ class ObjMesh:
             def gen_segmentation_color(
                 string,
             ):  # Dont care about having an awesome hash really, just want this to be deterministic
+                if "ghostie" in string:
+                    return [255, 0, 0]
+
                 hashed = "".join([str(ord(char)) for char in string])
                 segment_into_color = [int(hashed[i : i + 3]) % 255 for i in range(0, len(hashed), 3)][:3]
                 assert len(segment_into_color) == 3
