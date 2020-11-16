@@ -1568,7 +1568,9 @@ class Simulator(gym.Env):
                 num_salt = np.ceil(amount * img_array.size * s_vs_p)
                 coords = [np.random.randint(0, i - 1, int(num_salt))
                           for i in img_array.shape[:-1]]
-                temp[coords] = color
+                for coord in zip(coords[0], coords[1]):
+                    if np.all(out[coord] == [0, 0, 0], axis=-1):
+                        temp[coord] = color
                 import cv2
                 se2 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
                 mask = cv2.dilate(temp, se2, iterations=1)
