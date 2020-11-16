@@ -1551,6 +1551,23 @@ class Simulator(gym.Env):
         # properly, otherwise they are vertically inverted.
         img_array = np.ascontiguousarray(np.flip(img_array, axis=0))
 
+        # "salt and pepper" appropriate colors
+        # https://stackoverflow.com/questions/22937589/how-to-add-noise-gaussian-salt-and-pepper-etc-to-image-in-python-with-opencv
+        row, col, ch = img_array.shape
+        s_vs_p = 0.5
+        amount = 0.004
+        out = np.copy(img_array)
+        for color in map(np.array, [
+        [100, 117, 226],    # duckie
+        [0, 200, 0],         # ghostie
+        [116, 114, 117],    # truck
+        [216, 171, 15],     # bus
+                ]):
+            num_salt = np.ceil(amount * img_array.size * s_vs_p)
+            coords = [np.random.randint(0, i - 1, int(num_salt))
+                      for i in img_array.shape]
+            out[coords] = color
+
         return img_array
 
     def render_obs(self, segment=False):

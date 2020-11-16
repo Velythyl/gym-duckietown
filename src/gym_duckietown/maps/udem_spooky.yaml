@@ -26,7 +26,7 @@ tiles:
 #         Models should, at angle 0, face towards the positive X axis.
 objects:
 
-- kind: ghostie
+- kind: house
   pos: [2.5, 4.5]
   rotate: 180
   height: 0.25
@@ -38,32 +38,32 @@ objects:
   height: 0.08
   optional: true
 
-- kind: ghostie
+- kind: house
   pos: [2.08, 4.05]
   rotate: 90
   height: 0.18
-- kind: ghostie
+- kind: house
   pos: [0.94, 3.96]
   rotate: 90
   height: 0.18
-- kind: ghostie
+- kind: house
   pos: [2.08, 2.96]
   rotate: -90
   height: 0.18
-- kind: ghostie
+- kind: house
   pos: [0.94, 3.05]
   rotate: -90
   height: 0.18
-- kind: ghostie
+- kind: house
   pos: [0.94, 4.05]
   rotate: 0
   height: 0.18
-- kind: ghostie
+- kind: house
   pos: [0.94, 2.96]
   rotate: 0
   height: 0.18
 
-- kind: ghostie
+- kind: house
   pos: [4.8, 2.6]
   rotate: 90
   height: 0.5
