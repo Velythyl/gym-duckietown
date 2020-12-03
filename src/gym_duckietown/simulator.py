@@ -739,6 +739,7 @@ class Simulator(gym.Env):
         logger.info(f"Starting at {self.cur_pos} {self.cur_angle}")
 
         # Generate the first camera image
+        gl.glDisable(gl.GL_LIGHTING)  # FIXME if we don't do this, the lighting disappears after a bot dies. Why?
         obs = self.render_obs(segment=segment)
 
         # Return first observation
